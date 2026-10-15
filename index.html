@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crop Pulse</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#1F4D2B">
+<link rel="icon" href="/static/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#F4F1E8; --panel:#FFFFFF; --border:#DAD4C2; --text:#24211A; --dim:#5F5A4B; --mute:#8A8473;
+    --good:#2F7D3A; --good-bg:#E6F2E3; --watch:#9A6200; --watch-bg:#FBEFD5; --urgent:#B3261E; --urgent-bg:#FBE4E1;
+    --water:#1F6F9F;
+    --ui:'IBM Plex Sans',sans-serif; --mono:'IBM Plex Mono',monospace;
+  }
+  @media(prefers-color-scheme:dark){
+    :root{--bg:#171510;--panel:#211E17;--border:#3A352A;--text:#EDE8DC;--dim:#B3AD9A;--mute:#7E7867;
+      --good:#8CC57A;--good-bg:#233021;--watch:#E8B160;--watch-bg:#33290F;--urgent:#F09A92;--urgent-bg:#3A1F1C;--water:#5DB4E3;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ui);padding:0 16px 48px}
+  .wrap{max-width:900px;margin:0 auto}
+  header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:20px 0 14px}
+  h1{font-size:20px;margin:0;font-weight:700}
+  .eyebrow{font:500 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--water);margin:0 0 4px}
+  .pill{font:500 12px var(--mono);padding:6px 10px;border-radius:99px;background:var(--good-bg);color:var(--good);white-space:nowrap}
+  .pill.off{background:var(--urgent-bg);color:var(--urgent)}
+  .banner{display:none;background:var(--urgent-bg);color:var(--urgent);border:1px solid var(--urgent);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:14px}
+
+  .action{border-radius:10px;padding:18px;margin-bottom:16px;border:1px solid var(--border);background:var(--panel)}
+  .action .label{font:500 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+  .action .headline{font-size:22px;font-weight:700;margin:6px 0 4px}
+  .action .sub{color:var(--dim);font-size:14px}
+  .action.urgent{background:var(--urgent-bg);border-color:var(--urgent)}
+  .action.urgent .headline{color:var(--urgent)}
+  .action.good{background:var(--good-bg);border-color:var(--good)}
+  .action.good .headline{color:var(--good)}
+  .action.watch{background:var(--watch-bg);border-color:var(--watch)}
+  .action.watch .headline{color:var(--watch)}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px}
+  @media(min-width:700px){.grid{grid-template-columns:repeat(3,1fr)}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .card .k{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+  .card .v{font:600 28px var(--mono);margin-top:6px}
+  .card .v small{font-size:14px;color:var(--dim);font-weight:500}
+
+  h2{font-size:15px;margin:22px 0 10px;font-weight:600}
+  .tip{background:var(--panel);border:1px solid var(--border);border-left:5px solid var(--mute);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+  .tip.urgent{border-left-color:var(--urgent)} .tip.watch{border-left-color:var(--watch)} .tip.good{border-left-color:var(--good)}
+  .tip .area{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mute)}
+  .tip .t{font-weight:600;margin:3px 0 2px}
+  .tip .d{font-size:14px;color:var(--dim);line-height:1.5}
+
+  .chart-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
+  .chart-card canvas{max-height:200px}
+  footer{margin-top:24px;font-size:12px;color:var(--mute);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><p class="eyebrow">Crop Pulse</p><h1>Farm Dashboard</h1></div>
+    <span id="status" class="pill">connecting…</span>
+  </header>
+
+  <div id="banner" class="banner"></div>
+
+  <div id="action" class="action">
+    <div class="label">What to do now</div>
+    <div class="headline" id="headline">Loading…</div>
+    <div class="sub" id="sub"></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="k">Soil moisture</div><div class="v" id="v-moisture">—</div></div>
+    <div class="card"><div class="k">Soil pH</div><div class="v" id="v-ph">—</div></div>
+    <div class="card"><div class="k">Soil temp</div><div class="v" id="v-soil">—</div></div>
+    <div class="card"><div class="k">Animal temp</div><div class="v" id="v-animal">—</div></div>
+    <div class="card"><div class="k">Animal activity</div><div class="v" id="v-activity">—</div></div>
+    <div class="card"><div class="k">Pump</div><div class="v" id="v-pump">—</div></div>
+  </div>
+
+  <h2>Recommendations</h2>
+  <div id="tips"></div>
+
+  <h2>Recent trends</h2>
+  <div class="chart-card"><canvas id="c-moisture"></canvas></div>
+  <div class="chart-card"><canvas id="c-animal"></canvas></div>
+
+  <footer id="foot">Updates every 20 seconds</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (v, d=0, u='') => v == null ? '—' : v.toFixed(d) + (u ? `<small> ${u}</small>` : '');
+let charts = {};
+
+function line(id, label, color) {
+  const css = getComputedStyle(document.documentElement);
+  charts[id] = new Chart($(id), {
+    type: 'line',
+    data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: color + '22',
+            fill: true, tension: .3, pointRadius: 0, borderWidth: 2 }] },
+    options: { responsive: true, animation: false, plugins: { legend: { display: true } },
+               scales: { x: { ticks: { maxTicksLimit: 5 } } } }
+  });
+}
+
+async function refreshLatest() {
+  try {
+    const r = await fetch('/api/data'); const d = await r.json();
+    if (d.error) throw new Error(d.error);
+
+    $('v-moisture').innerHTML = fmt(d.moisture, 0, '%');
+    $('v-ph').innerHTML = fmt(d.ph, 2);
+    $('v-soil').innerHTML = fmt(d.soil_temp, 1, '°C');
+    $('v-animal').innerHTML = fmt(d.livestock_temp, 1, '°C');
+    $('v-activity').innerHTML = fmt(d.activity_index, 1);
+    $('v-pump').textContent = d.pump_on === 1 ? 'ON' : d.pump_on === 0 ? 'OFF' : '—';
+
+    const st = $('status');
+    if (d.offline) { st.textContent = 'device offline'; st.className = 'pill off';
+      $('banner').style.display = 'block';
+      $('banner').textContent = `No new data for ${d.age_min ?? '?'} min. Check the field device's power and WiFi. Showing the last known readings.`;
+    } else { st.textContent = 'live'; st.className = 'pill'; $('banner').style.display = 'none'; }
+
+    const top = d.advice[0];
+    $('action').className = 'action ' + (top ? top.level : '');
+    $('headline').textContent = top ? top.title : 'Waiting for data';
+    $('sub').textContent = top ? top.detail : '';
+    $('tips').innerHTML = d.advice.map(t =>
+      `<div class="tip ${t.level}"><div class="area">${t.area}</div><div class="t">${t.title}</div><div class="d">${t.detail}</div></div>`).join('');
+    $('foot').textContent = `Last reading: ${new Date(d.created_at).toLocaleString()} · refreshes every 20 s`;
+  } catch (e) {
+    $('status').textContent = 'error'; $('status').className = 'pill off';
+    $('banner').style.display = 'block';
+    $('banner').textContent = 'Could not load data: ' + e.message + ' — check ts.env keys and internet.';
+  }
+}
+
+async function refreshHistory() {
+  try {
+    const r = await fetch('/api/history'); const h = await r.json();
+    if (h.error) return;
+    const labels = h.t.map(t => new Date(t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+    charts['c-moisture'].data.labels = labels;
+    charts['c-moisture'].data.datasets[0].data = h.moisture;
+    charts['c-animal'].data.labels = labels;
+    charts['c-animal'].data.datasets[0].data = h.livestock_temp;
+    charts['c-moisture'].update(); charts['c-animal'].update();
+  } catch (e) {}
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+line('c-moisture', 'Soil moisture (%)', '#1F6F9F');
+line('c-animal', 'Animal temperature (°C)', '#B3601E');
+refreshLatest(); refreshHistory();
+setInterval(refreshLatest, 20000);
+setInterval(refreshHistory, 60000);
+</script>
+</body>
+</html>
