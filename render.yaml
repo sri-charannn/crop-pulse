@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: crop-pulse
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: THINGSPEAK_CHANNEL_ID
+        value: "3508766"
+      - key: THINGSPEAK_READ_API_KEY
+        sync: false
