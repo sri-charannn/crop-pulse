@@ -155,18 +155,37 @@ def build_advice(d):
 
 
 def latest():
-    d = fetch(CHANNEL_ID, READ_KEY, "feeds/last.json")
-    rec = to_float(d.get("field7"))
+    # The ESP32 writes fields 1-6 and live_inference.py writes fields 7-8 as
+    # SEPARATE entries, so the very last entry is often missing half the
+    # fields. Take the newest non-empty value of each field instead.
+    feeds = fetch(CHANNEL_ID, READ_KEY, "feeds.json", results=50).get("feeds", [])
+
+    def newest(field):
+        for f in reversed(feeds):
+            v = to_float(f.get(field))
+            if v is not None:
+                return v, f.get("created_at"), f.get("entry_id")
+        return None, None, None
+
+    moisture, m_time, m_id = newest("field1")
+    soil_temp, _, _ = newest("field2")
+    ph, _, _ = newest("field3")
+    pump_on, _, _ = newest("field4")
+    animal_t, _, _ = newest("field5")
+    activity, _, _ = newest("field6")
+    rec, _, _ = newest("field7")
+
     out = {
-        "moisture": to_float(d.get("field1")),
-        "soil_temp": to_float(d.get("field2")),
-        "ph": to_float(d.get("field3")),
-        "pump_on": to_float(d.get("field4")),
-        "livestock_temp": to_float(d.get("field5")),
-        "activity_index": to_float(d.get("field6")),
+        "moisture": moisture,
+        "soil_temp": soil_temp,
+        "ph": ph,
+        "pump_on": pump_on,
+        "livestock_temp": animal_t,
+        "activity_index": activity,
         "recommendation": "IRRIGATE" if rec == 1 else "HOLD" if rec == 0 else None,
-        "created_at": d.get("created_at"),
-        "entry_id": d.get("entry_id"),
+        # "device online" is judged by when SENSOR data last arrived
+        "created_at": m_time or (feeds[-1].get("created_at") if feeds else None),
+        "entry_id": m_id,
     }
     # Optional separate livestock channel overrides field5/6
     if LIVESTOCK_CHANNEL_ID:
